@@ -1,0 +1,90 @@
+name: Windows Build
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+env:
+  SDK_VERSION: "9.0.x"
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  build:
+    name: Build Windows (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [win-x64, win-x86, win-arm64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@2016bd2012dba4e32de620c46fe006a3ac9f0602 # v5.0.1
+        with:
+          dotnet-version: ${{ env.SDK_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore Jellyfin.sln
+
+      - name: Build solution
+        run: >
+          dotnet build Jellyfin.sln
+          --configuration Release
+          --no-restore
+
+      - name: Publish Jellyfin Server
+        run: >
+          dotnet publish Jellyfin.Server
+          --configuration Release
+          --output ./publish/${{ matrix.arch }}
+          --runtime ${{ matrix.arch }}
+          --self-contained false
+          --no-build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: jellyfin-server-${{ matrix.arch }}
+          path: ./publish/${{ matrix.arch }}
+          retention-days: 14
+          if-no-files-found: error
+
+  build-self-contained:
+    name: Build Windows Self-Contained (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [win-x64, win-arm64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@2016bd2012dba4e32de620c46fe006a3ac9f0602 # v5.0.1
+        with:
+          dotnet-version: ${{ env.SDK_VERSION }}
+
+      - name: Publish Jellyfin Server (self-contained)
+        run: >
+          dotnet publish Jellyfin.Server
+          --configuration Release
+          --output ./publish/${{ matrix.arch }}-self-contained
+          --runtime ${{ matrix.arch }}
+          --self-contained true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: jellyfin-server-${{ matrix.arch }}-self-contained
+          path: ./publish/${{ matrix.arch }}-self-contained
+          retention-days: 14
+          if-no-files-found: error
